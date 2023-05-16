@@ -1,0 +1,632 @@
+package com.rbc.nexgen.eureka.bcm.repository;
+
+import com.rbc.nexgen.eureka.bcm.entity.NexGenUser;
+import org.springframework.data.repository.CrudRepository;
+import org.springframework.stereotype.Repository;
+
+import java.util.List;
+
+@Repository
+public interface NexGenUserRepository extends CrudRepository<NexGenUser, Integer> {
+    List<NexGenUser> findById(int id);
+}
+-----2
+package com.rbc.nexgen.eureka.bcm.repository;
+
+import com.rbc.nexgen.eureka.bcm.entity.NexGenCustomer;
+import org.springframework.data.repository.CrudRepository;
+import org.springframework.data.rest.core.annotation.RepositoryRestResource;
+import org.springframework.stereotype.Repository;
+
+import java.util.List;
+
+@Repository
+//Sample hiding of default path
+@RepositoryRestResource(exported = false)
+public interface NexGenCustomerRepository extends CrudRepository<NexGenCustomer, Integer> {
+    List<NexGenCustomer> findById(int id);
+}
+
+-----3
+package com.rbc.nexgen.eureka.bcm.repository;
+
+import com.rbc.nexgen.eureka.bcm.entity.Employee;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.rest.core.annotation.RepositoryRestResource;
+import org.springframework.stereotype.Repository;
+
+import java.util.List;
+
+@Repository
+//Sample change of default path
+@RepositoryRestResource(path="internal-contacts")
+public interface EmployeeRepository extends JpaRepository<Employee, Integer> {
+//public interface EmployeeRepository extends CrudRepository<Employee, Integer> {
+    List<Employee> findById(int id);
+    List<Employee> findByOrderByFirstNameDesc();
+}
+-----4
+package com.rbc.nexgen.eureka.bcm.entity;
+
+import javax.persistence.*;
+
+/**
+ * http://localhost:10761/profile
+ * http://localhost:10761/employees/113
+ * http://localhost:10761/employees/search
+ * http://localhost:10761/employees/search/findById?id=1
+ * http://localhost:10761/data-api/
+ */
+@Entity
+@Table(name="Employee")
+public class Employee {
+    @Id
+    @GeneratedValue(strategy = GenerationType.AUTO)
+    private int id;
+
+    @Column(name = "first_name")
+    private String firstName;
+
+    @Column(name = "last_name")
+    private String lastName;
+}
+
+-----5
+package com.rbc.nexgen.eureka.bcm.entity;
+
+import javax.persistence.*;
+
+/**
+ * http://localhost:10761/nexGenCustomers/1
+ */
+@Entity
+@Table(name="NexGenCustomer")
+public class NexGenCustomer {
+    @Id
+    @GeneratedValue(strategy = GenerationType.AUTO)
+    private long id;
+
+    @Column(name = "email")
+    private String email;
+
+    @Column(name = "pwd")
+    private String pwd;
+
+    @Column(name = "role")
+    private String role;
+}
+
+-----6
+package com.rbc.nexgen.eureka.bcm.entity;
+
+import javax.persistence.*;
+
+/**
+ * http://localhost:10761/nexGenUsers/1
+ */
+@Entity
+@Table(name="nex_gen_user")
+public class NexGenUser {
+    @Id
+    @GeneratedValue(strategy = GenerationType.AUTO)
+    private long id;
+
+    @Column(name = "first_name")
+    private String firstName;
+
+    @Column(name = "last_name")
+    private String lastName;
+}
+-----7
+package com.rbc.nexgen.eureka.bcm.controller;
+
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.rbc.nexgen.eureka.batch.entity.BatchJobExecutionEntity;
+import com.rbc.nexgen.eureka.bcm.entity.Employee;
+import com.rbc.nexgen.eureka.bcm.repository.EmployeeRepository;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
+
+/**
+ * In case we need to have to send response in XML format do the following:
+ * https://www.udemy.com/course/spring-springboot-jpa-hibernate-zero-to-master/learn/lecture/31136684#overview
+ * Lesson 214
+ * 1. Add jackson-dataformat-xml to pom.xml
+ * 2. Change @RequestMapping annotation (, producers =
+ * 		{MediaType.APPLICATION_JSON_VALUE, MediaTYpe.APPLICATION_XML_VALUE}
+ * 3. Caller has to add Accept = application/xml to header
+ */
+@RestController
+@Slf4j
+@CrossOrigin(origins="*")
+@RequestMapping("/bcm")
+//record Person(String name, int age){}; Java 16
+public class BcmRestController {
+	
+	@Autowired
+	private EmployeeRepository employeeRepository;
+
+	@GetMapping("/first-name")
+	//@Retry(name = "helloRetry", fallbackMethod = "handleError")
+	public List<Employee> getEmployeesSorted() {
+		log.info("getEmployeesSorted() method started");
+		List<Employee> ems = employeeRepository.findByOrderByFirstNameDesc();
+		//List<Employee> ems = null;
+		log.info("getEmployeesSorted() method ended");
+		if (ems != null) {
+			return ems;
+		} else {
+			return null;
+		}
+	}
+
+	/* To test */
+	public static Object objectMapper(Object object){
+    	ObjectMapper mapper = new ObjectMapper();
+    	mapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+    	BatchJobExecutionEntity service = mapper.convertValue(object, BatchJobExecutionEntity.class);
+        return service;
+    }
+}
+-----8
+package com.rbc.nexgen.eureka.batch.repository;
+
+import com.rbc.nexgen.eureka.batch.entity.BatchJobExecutionEntity;
+import com.rbc.nexgen.eureka.batch.entity.BatchJobExecutionStatusEntity;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import java.util.List;
+
+public interface BatchJobExecutionJPA extends JpaRepository<BatchJobExecutionEntity, Integer> {
+	public List<BatchJobExecutionStatusEntity> getAllBatchJobExecutions();
+	public List<BatchJobExecutionEntity> getTestBatchJobExecutions();
+	public List<BatchJobExecutionStatusEntity> getAllNotCompletedBatchJobExecutions();
+
+}
+-----9
+package com.rbc.nexgen.eureka.batch.repository;
+
+import com.rbc.nexgen.eureka.batch.entity.BatchJobExecutionEntity;
+import com.rbc.nexgen.eureka.batch.entity.BatchJobExecutionStatusEntity;
+import com.rbc.nexgen.eureka.batch.repository.BatchJobExecutionJPA;
+import org.springframework.data.domain.Example;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.repository.query.FluentQuery.FetchableFluentQuery;
+import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
+
+import javax.persistence.EntityManager;
+import javax.persistence.PersistenceContext;
+import java.util.List;
+import java.util.Optional;
+import java.util.function.Function;
+
+@Repository
+@Transactional
+public class BatchJobExecutionJPAImpl implements BatchJobExecutionJPA {
+
+	@PersistenceContext
+	private EntityManager manager;
+
+	@Override
+	public List<BatchJobExecutionEntity> getTestBatchJobExecutions() {
+		List<BatchJobExecutionEntity> jobs = manager.createNamedQuery("getTestBatchJobExecutions", BatchJobExecutionEntity.class)
+				.getResultList();
+		return jobs;
+	}
+
+	@Override
+	public List<BatchJobExecutionStatusEntity> getAllBatchJobExecutions() {
+		List<BatchJobExecutionStatusEntity> jobs = manager.createNamedQuery("getAllBatchJobExecutions", BatchJobExecutionStatusEntity.class)
+				.getResultList();
+		return jobs;
+	}
+	
+	@Override
+	public List<BatchJobExecutionStatusEntity> getAllNotCompletedBatchJobExecutions() {
+		List<BatchJobExecutionStatusEntity> jobs = manager.createNamedQuery("getAllNotCompletedBatchJobExecutions", BatchJobExecutionStatusEntity.class)
+				.getResultList();
+		return jobs;
+	}
+
+	@Override
+	public List<BatchJobExecutionEntity> findAll() {
+		return null;
+	}
+
+	@Override
+	public List<BatchJobExecutionEntity> findAll(Sort sort) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public List<BatchJobExecutionEntity> findAllById(Iterable<Integer> ids) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public <S extends BatchJobExecutionEntity> List<S> saveAll(Iterable<S> entities) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public void flush() {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public <S extends BatchJobExecutionEntity> S saveAndFlush(S entity) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public <S extends BatchJobExecutionEntity> List<S> saveAllAndFlush(Iterable<S> entities) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public void deleteAllInBatch(Iterable<BatchJobExecutionEntity> entities) {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void deleteAllByIdInBatch(Iterable<Integer> ids) {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void deleteAllInBatch() {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public BatchJobExecutionEntity getOne(Integer id) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public BatchJobExecutionEntity getById(Integer id) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public <S extends BatchJobExecutionEntity> List<S> findAll(Example<S> example) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public <S extends BatchJobExecutionEntity> List<S> findAll(Example<S> example, Sort sort) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public Page<BatchJobExecutionEntity> findAll(Pageable pageable) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public <S extends BatchJobExecutionEntity> S save(S entity) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public Optional<BatchJobExecutionEntity> findById(Integer id) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public boolean existsById(Integer id) {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public long count() {
+		// TODO Auto-generated method stub
+		return 0;
+	}
+
+	@Override
+	public void deleteById(Integer id) {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void delete(BatchJobExecutionEntity entity) {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void deleteAllById(Iterable<? extends Integer> ids) {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void deleteAll(Iterable<? extends BatchJobExecutionEntity> entities) {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void deleteAll() {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public <S extends BatchJobExecutionEntity> Optional<S> findOne(Example<S> example) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public <S extends BatchJobExecutionEntity> Page<S> findAll(Example<S> example, Pageable pageable) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public <S extends BatchJobExecutionEntity> long count(Example<S> example) {
+		// TODO Auto-generated method stub
+		return 0;
+	}
+
+	@Override
+	public <S extends BatchJobExecutionEntity> boolean exists(Example<S> example) {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public <S extends BatchJobExecutionEntity, R> R findBy(Example<S> example,
+			Function<FetchableFluentQuery<S>, R> queryFunction) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+}
+-----10
+package com.rbc.nexgen.eureka.batch.entity;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import javax.persistence.*;
+import java.io.Serializable;
+
+//https://howtodoinjava.com/jpa/jpa-native-query-example-select/
+@Entity(name="BatchJobExecutionEntity")
+@Table(name="BATCH_JOB_EXECUTION")
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+@JsonIgnoreProperties({"hibernateLazyInitializer"})
+@NamedNativeQueries({
+    @NamedNativeQuery(
+            name  = "getTestBatchJobExecutions",
+            query = "select [JOB_EXECUTION_ID],[VERSION],[JOB_INSTANCE_ID],[CREATE_TIME],[START_TIME],[END_TIME],[STATUS],[EXIT_CODE],"+
+            		"[EXIT_MESSAGE],[LAST_UPDATED],[JOB_CONFIGURATION_LOCATION] FROM BATCH_JOB_EXECUTION ",
+                  resultClass=BatchJobExecutionEntity.class
+        )
+})
+
+public class BatchJobExecutionEntity implements Serializable {
+
+	private static final long serialVersionUID = 1L;
+	@Id
+	@Column(name = "JOB_EXECUTION_ID")
+	private String JOB_EXECUTION_ID;	
+	@Column(name = "VERSION") 
+	private String VERSION;	 
+	@Column(name = "JOB_INSTANCE_ID")
+	private String JOB_INSTANCE_ID;
+	@Column(name = "CREATE_TIME")
+	private String CREATE_TIME;
+	@Column(name = "START_TIME")
+	private String START_TIME;
+	@Column(name = "END_TIME")
+	private String END_TIME;
+	@Column(name = "STATUS")
+	private String STATUS;
+	@Column(name = "EXIT_CODE")
+	private String EXIT_CODE;
+	@Column(name = "EXIT_MESSAGE")
+	private String EXIT_MESSAGE;
+	@Column(name = "LAST_UPDATED") 
+	private String LAST_UPDATED;
+	@Column(name = "JOB_CONFIGURATION_LOCATION") 
+	private String JOB_CONFIGURATION_LOCATION;
+}
+-----11
+package com.rbc.nexgen.eureka.batch.entity;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import javax.persistence.*;
+import java.io.Serializable;
+
+//https://howtodoinjava.com/jpa/jpa-native-query-example-select/
+@Entity(name="BatchJobExecutionStatusEntity")
+@Table(name="BATCH_JOB_EXECUTION")
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+@JsonIgnoreProperties({"hibernateLazyInitializer"})
+@NamedNativeQueries({
+	@NamedNativeQuery(
+	        name  = "getAllBatchJobExecutions",
+	        query = "SELECT a.JOB_EXECUTION_ID,a.JOB_INSTANCE_ID,b.JOB_NAME,a.CREATE_TIME,a.START_TIME,a.END_TIME, "+
+	        "a.STATUS,a.EXIT_CODE,a.EXIT_MESSAGE FROM BATCH_JOB_EXECUTION a left join "+
+	        "BATCH_JOB_INSTANCE b on a.job_instance_id = b.job_instance_id ",
+	              resultClass=BatchJobExecutionStatusEntity.class
+	    ),
+    @NamedNativeQuery(
+        name  = "getAllNotCompletedBatchJobExecutions",
+        query = "SELECT a.JOB_EXECUTION_ID,a.JOB_INSTANCE_ID,b.JOB_NAME,a.CREATE_TIME,a.START_TIME,a.END_TIME, "+
+        "a.STATUS,a.EXIT_CODE,a.EXIT_MESSAGE FROM BATCH_JOB_EXECUTION a left join "+
+        "BATCH_JOB_INSTANCE b on a.job_instance_id = b.job_instance_id " +
+        "where status <>'COMPLETED' or EXIT_CODE<>'COMPLETED' order by START_TIME desc",
+              resultClass=BatchJobExecutionStatusEntity.class
+    )
+})
+
+public class BatchJobExecutionStatusEntity implements Serializable {
+
+	private static final long serialVersionUID = 1L;
+
+	@Id
+	@Column(name = "JOB_EXECUTION_ID")
+	private String JOB_EXECUTION_ID;	
+	@Column(name = "JOB_INSTANCE_ID")
+	private String JOB_INSTANCE_ID;
+	@Column(name = "JOB_NAME")
+	private String JOB_NAME;
+	@Column(name = "CREATE_TIME")
+	private String CREATE_TIME;
+	@Column(name = "START_TIME")
+	private String START_TIME;
+	@Column(name = "END_TIME")
+	private String END_TIME;
+	@Column(name = "STATUS")
+	private String STATUS;
+	@Column(name = "EXIT_CODE")
+	private String EXIT_CODE;
+	@Column(name = "EXIT_MESSAGE")
+	private String EXIT_MESSAGE;
+}
+-----12
+package com.rbc.nexgen.eureka.batch.controller;
+
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.rbc.nexgen.eureka.batch.repository.BatchJobExecutionJPA;
+import com.rbc.nexgen.eureka.batch.entity.BatchJobExecutionEntity;
+import com.rbc.nexgen.eureka.batch.entity.BatchJobExecutionStatusEntity;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.List;
+
+/**
+ * In case we need to have to send response in XML format do the following:
+ * https://www.udemy.com/course/spring-springboot-jpa-hibernate-zero-to-master/learn/lecture/31136684#overview
+ * Lesson 214
+ * 1. Add jackson-dataformat-xml to pom.xml
+ * 2. Change @RequestMapping annotation (, producers =
+ * 		{MediaType.APPLICATION_JSON_VALUE, MediaTYpe.APPLICATION_XML_VALUE}
+ * 3. Caller has to add Accept = application/xml to header
+ */
+@RestController
+@Slf4j
+@CrossOrigin(origins="*")
+@RequestMapping("/batch")
+public class BatchJobsRestController {
+	
+	@Autowired
+	private BatchJobExecutionJPA batchJobExecutionJPA;
+
+	@GetMapping("/jobs")
+	//@Retry(name = "helloRetry", fallbackMethod = "handleError")
+	public List<BatchJobExecutionStatusEntity> getAllBatchJobExecutions() {
+		log.info("getAllBatchJobExecutions() method started");
+		List<BatchJobExecutionStatusEntity> jobs = batchJobExecutionJPA.getAllBatchJobExecutions();
+		log.info("getAllBatchJobExecutions() method ended");
+		if (jobs != null) {
+			return jobs;
+		} else {
+			return null;
+		}
+	}
+	@GetMapping("/jobsNotCompleted")
+	public List<BatchJobExecutionStatusEntity> getAllNotCompletedBatchJobExecutions() {
+		log.info("getAllNotCompletedBatchJobExecutions() method started");
+		List<BatchJobExecutionStatusEntity> jobs = batchJobExecutionJPA.getAllNotCompletedBatchJobExecutions();
+		log.info("getAllNotCompletedBatchJobExecutions() method ended");
+		if (jobs != null) {
+			return jobs;
+		} else {
+			return null;
+		}
+	}
+
+	@GetMapping("/test")
+	//@Retry(name = "helloRetry", fallbackMethod = "handleError")
+	public List<BatchJobExecutionEntity> getTestBatchJobExecution() {
+		List<BatchJobExecutionEntity> jobs = batchJobExecutionJPA.getTestBatchJobExecutions();
+		if (jobs != null) {
+			System.out.println(jobs);
+			return jobs;
+		} else {
+			return null;
+		}
+	}
+	//https://dzone.com/articles/java-springboot-rest-api-to-uploaddownload-file-on
+	@RequestMapping(value = "/file-upload", method = RequestMethod.POST)
+    @ResponseBody
+    public String uploadFile(@RequestParam("file") MultipartFile multipartFile) throws IOException {
+        multipartFile.transferTo(new File("C:\\test\\" + multipartFile.getOriginalFilename()));
+        return "success";
+    }
+	//TODO https://spring.io/guides/gs/uploading-files/
+	//https://websparrow.org/spring/spring-boot-rest-api-file-upload-save-example
+	@PostMapping("/uploadFile")
+	public String uploadFile2(@RequestParam("file") MultipartFile file)
+			throws IOException {
+		byte[] bytes = file.getBytes();
+		Path path = Paths.get("C:\\test\\" + file.getOriginalFilename());
+		Files.write(path, bytes);
+
+		return "File uploaded";
+	}
+	
+	/* To test */
+	public static Object objectMapper(Object object){
+    	ObjectMapper mapper = new ObjectMapper();
+    	mapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+    	BatchJobExecutionEntity service = mapper.convertValue(object, BatchJobExecutionEntity.class);
+        return service;
+    }
+}
