@@ -1,0 +1,545 @@
+package com.rbc.nexgen.eureka;
+
+//https://www.concretepage.com/spring-boot/spring-boot-custom-banner-example
+import java.io.PrintStream;
+
+import org.springframework.boot.Banner;
+import org.springframework.core.env.Environment;
+
+public class NexGenBanner implements Banner {
+
+	@Override
+	public void printBanner(Environment env, Class<?> sourceClass, PrintStream out) {
+		out.println("=================================================================");
+		out.println("-------   RBC NexGen Common Data Integration Layer, 2022");
+		out.println("-------   Active profile   : " + env.getProperty("spring.profiles.active"));
+		out.println("-------   Application name : " + env.getProperty("spring.application.name"));
+		//out.println("-------   Server port      :   " + env.getProperty("server.port"));
+		out.println("=================================================================");
+	}
+}
+----2
+package com.rbc.nexgen.eureka;
+
+import de.codecentric.boot.admin.server.config.EnableAdminServer;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.autoconfigure.domain.EntityScan;
+import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
+import org.springframework.cloud.netflix.eureka.server.EnableEurekaServer;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
+
+//https://www.youtube.com/watch?v=JoCGWqYzt4U
+//https://github.com/codecentric/spring-boot-admin/tree/master/spring-boot-admin-samples/spring-boot-admin-sample-custom-ui/
+//https://mvnrepository.com/artifact/de.codecentric/spring-boot-admin-starter-server
+// PATTERN: https://microservices.io/patterns/server-side-discovery.html
+// https://stackoverflow.com/questions/53614994/spring-boot-2-1-1-eureka-discovery-spring-boot-admin-server
+@SpringBootApplication
+@EnableEurekaServer
+@EnableAdminServer
+@EnableDiscoveryClient
+@Configuration
+@EnableAutoConfiguration
+@ComponentScan({
+		"com.rbc.nexgen.eureka.config",
+		"com.rbc.nexgen.eureka.security.config",
+		"com.rbc.nexgen.eureka.batch.controller",
+		"com.rbc.nexgen.eureka.bcm.controller",
+		"com.rbc.nexgen.eureka.batch.repository",
+		"com.rbc.nexgen.eureka.bcm.repository",
+		"com.rbc.nexgen.eureka.security.repository",
+		"com.rbc.nexgen.eureka.upload.repository",
+		"com.rbc.nexgen.eureka.upload.controller"
+})
+@EntityScan({
+		"com.rbc.nexgen.eureka.batch.entity",
+		"com.rbc.nexgen.eureka.bcm.entity",
+		"com.rbc.nexgen.eureka.security.entity",
+		"com.rbc.nexgen.eureka.upload.entity"
+})
+public class NexGenEurekaApplication {
+
+	public static void main(String[] args) {
+		SpringApplication application = new SpringApplication(NexGenEurekaApplication.class);
+		//application.setBannerMode(Banner.Mode.OFF);
+		application.setBanner(new NexGenBanner());
+		application.run(args);
+	}
+	@Configuration
+	public static class SecurityPermitAllConfig extends WebSecurityConfigurerAdapter {
+		@Override
+		protected void configure(HttpSecurity http) throws Exception {
+			http.authorizeRequests().anyRequest().permitAll()
+					.and().csrf().disable();
+		}
+	}
+}
+-----3
+package com.rbc.nexgen.eureka.util;
+
+import java.io.File;
+
+public interface EmailUtil {
+    void sendEmail(String toAddress, String subject, String body);
+    void sendEmailWithAttachment(String toAddress, String filePath);
+}
+-----4
+package com.rbc.nexgen.eureka.util;
+
+import java.io.File;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.MimeMessageHelper;
+import org.springframework.stereotype.Component;
+
+import javax.mail.internet.MimeMessage;
+
+@Component
+public class EmailUtilImpl implements EmailUtil {
+    @Value("${spring.mail.subject}")
+    private String EMAIL_SUBJECT = "Attachemnt.";
+    @Value("${spring.mail.body}")
+    private String EMAIL_BODY = "Please see the attachment.";
+    @Autowired
+    JavaMailSender javaMailSender;
+
+    @Override
+    public void sendEmail(String toAddress, String subject, String body) {
+        MimeMessage mimeMessage = javaMailSender.createMimeMessage();
+
+        try {
+            MimeMessageHelper helper = new MimeMessageHelper(mimeMessage);
+            helper.setTo(toAddress);
+            helper.setSubject(subject);
+            helper.setText(body);
+        }catch (Exception e){
+            e.printStackTrace();
+        }
+        javaMailSender.send(mimeMessage);
+    }
+
+    @Override
+    public void sendEmailWithAttachment(String toAddress, String filePath) {
+        MimeMessage mimeMessage = javaMailSender.createMimeMessage();
+
+        try {
+            MimeMessageHelper helper = new MimeMessageHelper(mimeMessage);
+            helper.setTo(toAddress);
+            helper.setSubject(EMAIL_SUBJECT);
+            helper.setText(EMAIL_BODY);
+            helper.addAttachment("File", new File(filePath));
+        }catch (Exception e){
+            e.printStackTrace();
+        }
+        javaMailSender.send(mimeMessage);
+    }
+}
+-----5
+package com.rbc.nexgen.eureka.upload.repository;
+
+import com.rbc.nexgen.eureka.upload.entity.Document;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+@Repository
+public interface DocumentRepository extends JpaRepository<Document, Long>{
+
+}
+-----6
+package com.rbc.nexgen.eureka.upload.entity;
+
+import javax.persistence.Entity;
+import javax.persistence.Id;
+import javax.persistence.Lob;
+
+@Entity
+public class Document {
+
+    @Id
+    private long id;
+    private String name;
+    @Lob
+    private byte[] data;
+
+    public long getId() {
+        return id;
+    }
+
+    public void setId(long id) {
+        this.id = id;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public byte[] getData() {
+        return data;
+    }
+
+    public void setData(byte[] data) {
+        this.data = data;
+    }
+
+}
+
+-----7
+package com.rbc.nexgen.eureka.upload.controller;
+
+import java.io.IOException;
+import java.util.List;
+
+import javax.servlet.http.HttpServletResponse;
+
+import com.rbc.nexgen.eureka.upload.entity.Document;
+import com.rbc.nexgen.eureka.upload.repository.DocumentRepository;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.ui.ModelMap;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
+
+
+@RestController
+@Slf4j
+@CrossOrigin(origins="*")
+@RequestMapping("/upload")
+public class DocumentController {
+    @Autowired
+    DocumentRepository repository;
+
+    @RequestMapping("/displayUpload")
+    public String displayUpload(ModelMap modelMap) {
+        List<Document> documents = repository.findAll();
+        System.out.println(documents.size());
+        modelMap.addAttribute("documents", documents);
+        return "documentUpload";
+    }
+
+    @RequestMapping(value = "/upload", method = RequestMethod.POST)
+    public String uploadDocument(@RequestParam("document") MultipartFile multipartFile, @RequestParam("id") long id,
+                                 ModelMap modelMap) {
+        Document document = new Document();
+        document.setId(id);
+        document.setName(multipartFile.getOriginalFilename());
+        try {
+            document.setData(multipartFile.getBytes());
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        repository.save(document);
+
+        List<Document> documents = repository.findAll();
+        System.out.println(documents.size());
+        modelMap.addAttribute("documents", documents);
+        return "documentUpload";
+    }
+
+    @RequestMapping("/download")
+    public StreamingResponseBody download(@RequestParam("id") long id, HttpServletResponse response) {
+        Document document = repository.findById(id).get();
+        byte[] data = document.getData();
+
+        response.setHeader("Content-Disposition", "attachment;filename=downloaded.jpeg");
+
+        return outputStream -> {
+            outputStream.write(data);
+        };
+    }
+}
+
+-----8
+package com.rbc.nexgen.eureka.service;
+
+import org.springframework.stereotype.Service;
+//import org.springframework.transaction.annotation.Transactional;
+
+@Service
+public class UserService {
+
+    //Use transaction on Service layer classes
+    //@Transactional
+    public void saveUser(){
+        //test
+    }
+
+}
+-----9
+package com.rbc.nexgen.eureka.security.config;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.NoOpPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+
+/**
+ * https://www.udemy.com/course/spring-springboot-jpa-hibernate-zero-to-master/learn/lecture/31181386#overview
+ * Lesson 241 - Actuator
+ * https://www.udemy.com/course/spring-boot-and-spring-framework-tutorial-for-beginners/learn/lecture/35017682#overview
+ * Lesson 279
+ */
+//@Configuration
+//@EnableWebSecurity
+public class SpringSecurityConfig extends WebSecurityConfigurerAdapter {
+
+    //@Autowired
+    //UserDetailsServiceImpl userDetailsServiceImpl;
+
+    //@Override
+    /*
+     * With this method we let Spring Sercurity know that we have our own UserDetailsServiceImpl
+     */
+    //protected void configure(AuthenticationManagerBuilder auth) throws Exception {
+        //auth.userDetailsService(userDetailsServiceImpl).passwordEncoder(passwordEncoder());
+    //}
+
+    @Override
+    protected void configure(HttpSecurity http) throws Exception {
+        http.csrf()
+                .ignoringAntMatchers("/api/**")
+                .ignoringAntMatchers("/data-api/**")
+                .and()
+                .authorizeRequests()
+                .mvcMatchers("/api/**").authenticated()
+                .mvcMatchers("/spring-admin/**").authenticated()
+                .mvcMatchers("/jobs/**").authenticated()
+                .mvcMatchers("/actuator-api/**").hasRole("ADMIN")
+                .mvcMatchers("/home/**").permitAll();
+
+        http.authorizeRequests().antMatchers("/", "/login").permitAll()
+                .antMatchers("/home").authenticated()
+                .and().csrf().disable()
+                .formLogin().loginPage("/login")
+                .defaultSuccessUrl("/home")
+                .usernameParameter("username")
+                .passwordParameter("password")
+                .and().exceptionHandling().accessDeniedPage("/access-denied")
+                .and().logout().logoutUrl("/logout").logoutSuccessUrl("/login");
+    }
+
+    /**
+     * Password encription bean.
+     */
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        //Avoiding default encryption parameters
+        //version the version of bcrypt, can be 2a,2b,2y
+        //strength the log rounds to use, between 4 and 31
+        //return new BCryptPasswordEncoder( BCryptVersion.$2Y, 27);
+        return new BCryptPasswordEncoder();
+        //NoOpPasswordEncoder is DEPRECATED (here for testing purpose only)
+        //return NoOpPasswordEncoder.getInstance();
+    }
+    //TODO see the options
+    @Bean
+    public BCryptPasswordEncoder bCryptPasswordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+
+    @Override
+    @Bean
+    public AuthenticationManager authenticationManagerBean() throws Exception {
+        return super.authenticationManager();
+    }
+}
+
+-----10
+package com.rbc.nexgen.eureka.reports.jasper.controller;
+
+import com.rbc.nexgen.eureka.upload.repository.DocumentRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.ui.ModelMap;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+
+@RestController
+@RequestMapping("/report/pdf")
+public class PdfReportController {
+    @Autowired
+    DocumentRepository repository;
+
+    @RequestMapping("/test")
+    public String testReport(ModelMap modelMap) {
+        return "test report pdf";
+    }
+ }
+-----11
+package com.rbc.nexgen.eureka.reports.excel.controller;
+
+import com.rbc.nexgen.eureka.upload.repository.DocumentRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.ui.ModelMap;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+/**
+ * https://www.udemy.com/course/reporting-with-jasperreports-java-spring-boot-jasperstudio-jaspersoft/learn/lecture/23429912#overview
+ */
+
+@RestController
+@RequestMapping("/report/excel")
+public class ExcelReportController {
+    @Autowired
+    DocumentRepository repository;
+
+    @RequestMapping("/test")
+    public String testReport(ModelMap modelMap) {
+        return "test report excel";
+    }
+ }
+-----12
+package com.rbc.nexgen.eureka.exceptions;
+
+import java.util.Date;
+
+public class ErrorDetails {
+    private Date timestamp;
+    private String message;
+    private String details;
+
+    public ErrorDetails(Date timestamp, String message, String details) {
+        this.timestamp = timestamp;
+        this.message = message;
+        this.details = details;
+    }
+
+    public Date getTimestamp() {
+        return timestamp;
+    }
+
+    public String getMessage() {
+        return message;
+    }
+
+    public String getDetails() {
+        return details;
+    }
+}
+-----13
+package com.rbc.nexgen.eureka.exceptions;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.ControllerAdvice;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.context.request.WebRequest;
+
+import java.util.Date;
+
+@ControllerAdvice
+public class GlobalExceptionHandler {
+    // handle specific exceptions
+    @ExceptionHandler(NexGenException.class)
+    public ResponseEntity<ErrorDetails> handleNexGenException(NexGenException exception, WebRequest webRequest){
+        ErrorDetails errorDetails = new ErrorDetails(new Date(), exception.getMessage(),
+                webRequest.getDescription(false));
+        return new ResponseEntity<>(errorDetails, HttpStatus.NOT_FOUND);
+    }
+
+    // global exceptions
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ErrorDetails> handleGlobalException(Exception exception,
+                                                              WebRequest webRequest){
+        ErrorDetails errorDetails = new ErrorDetails(new Date(), exception.getMessage(),
+                webRequest.getDescription(false));
+        return new ResponseEntity<>(errorDetails, HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+}
+-----14
+package com.rbc.nexgen.eureka.exceptions;
+
+public class NexGenException extends Exception {
+}
+-----15
+package com.rbc.nexgen.eureka.config;
+
+import lombok.extern.log4j.Log4j2;
+import org.aspectj.lang.JoinPoint;
+import org.aspectj.lang.annotation.After;
+import org.aspectj.lang.annotation.Aspect;
+import org.aspectj.lang.annotation.Before;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+@Aspect
+@Log4j2
+public class AspectConfig {
+
+    @Before(value = "execution(* com.rbc.nexgen.eureka.batch.controller.*.*(..))")
+    public void beforeAdvice (JoinPoint joinPoint) {
+        log.info("Inside Before Advice");
+    }
+    @After(value = "execution(* com.rbc.nexgen.eureka.batch.controller.*.*(..))")
+    public void afterAdvice (JoinPoint joinPoint) {
+        log.info("Inside After Advice");
+    }
+/*    @After(value = "execution(* com.rbc.nexgen.eureka.batch.controller.*.*(..)) and args(object)")
+    public void beforeAdvice (JoinPoint joinPoint, Object object) {
+        log.info("Request = " + object);
+    }*/
+/*	@Before(value = "execution(* com.rbc.nexgen.eureka.batch.controller.*.*(..))")
+	public void beforeAdvice (JoinPoint joinPoint) {
+		log.info("Inside Before Advice");
+	}*/
+
+	/*@Before(value = "execution(* com.example.controller.*.*(..)) and args(object)")
+	public void beforeAdvice (JoinPoint joinPoint, Object object) {
+		logger.info("Request = " + object);
+	}*/
+
+	/*@AfterReturning(value = "execution(* com.example.controller.*.*(..)) and args(object)",
+			returning = "returningObject")
+	public void beforeAdvice (JoinPoint joinPoint, Object object, Object returningObject) {
+		logger.info("Response = " + returningObject);
+	}*/
+
+/*    @Around(value = "execution(* com.rbc.nexgen.eureka.batch.controller.*.*(..))")
+    public void aroundAdvice (ProceedingJoinPoint proceedingJoinPoint, Object object_one_par) {
+        log.info("Inside Around Advice");
+
+        Object returningObject = null;
+        try {
+            returningObject = proceedingJoinPoint.proceed();
+        } catch (Throwable e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+    }*/
+}
+-----16
+package com.rbc.nexgen.eureka.config;
+
+import org.springframework.boot.actuate.info.Info;
+import org.springframework.boot.actuate.info.InfoContributor;
+import org.springframework.stereotype.Component;
+
+import java.util.HashMap;
+import java.util.Map;
+
+@Component
+public class NexGenInfoContributor implements InfoContributor {
+    @Override
+    public void contribute(Info.Builder builder) {
+        Map<String, String> info = new HashMap<String, String>();
+        info.put("App Name", "Eureka/Spring Boot Admin/NexGen Admin");
+        info.put("App Description", "Eureka registry, Spring Boot Admin Server and NexGen Admin Server");
+        info.put("App Version", "2023.5.15");
+        info.put("Contact", "nikola.rosko@rbccm.com");
+        builder.withDetail("java-app",info);
+    }
+}
+-----17
