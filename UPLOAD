@@ -1,6 +1,12 @@
 @CrossOrigin(origins="*")
 @RequestMapping("/batch")
 public class BatchJobsRestController {
+
+/**
+ * 	https://dzone.com/articles/java-springboot-rest-api-to-uploaddownload-file-on
+ * 	https://spring.io/guides/gs/uploading-files/
+ * 	https://websparrow.org/spring/spring-boot-rest-api-file-upload-save-example
+ */
   
   //https://dzone.com/articles/java-springboot-rest-api-to-uploaddownload-file-on
 	@RequestMapping(value = "/file-upload", method = RequestMethod.POST)
