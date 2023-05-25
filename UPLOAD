@@ -31,3 +31,14 @@ public class BatchJobsRestController {
             outputStream.write(data);
         };
     }
+    
+       @RequestMapping(value = "/directory", method = RequestMethod.POST)
+    public ResponseEntity uploadToDirectory(@RequestParam MultipartFile file) throws IOException {
+
+        byte[] bytes = file.getBytes();
+        Path path = Paths.get(DIR_TO_UPLOAD + file.getOriginalFilename());
+        Files.write(path, bytes);
+
+        ResponseEntity ret = new ResponseEntity (HttpStatus.OK);
+        return ret;
+    }
