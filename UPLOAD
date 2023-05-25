@@ -1,0 +1,33 @@
+@CrossOrigin(origins="*")
+@RequestMapping("/batch")
+public class BatchJobsRestController {
+  
+  //https://dzone.com/articles/java-springboot-rest-api-to-uploaddownload-file-on
+	@RequestMapping(value = "/file-upload", method = RequestMethod.POST)
+    @ResponseBody
+    public String uploadFile(@RequestParam("file") MultipartFile multipartFile) throws IOException {
+        multipartFile.transferTo(new File("C:\\test\\" + multipartFile.getOriginalFilename()));
+        return "success";
+    }
+	//TODO https://spring.io/guides/gs/uploading-files/
+	//https://websparrow.org/spring/spring-boot-rest-api-file-upload-save-example
+	@PostMapping("/uploadFile")
+	public String uploadFile2(@RequestParam("file") MultipartFile file)	throws IOException {
+		byte[] bytes = file.getBytes();
+		Path path = Paths.get("C:\\test\\" + file.getOriginalFilename());
+		Files.write(path, bytes);
+
+		return "File uploaded";
+	}
+  
+      @RequestMapping("/download")
+    public StreamingResponseBody download(@RequestParam("id") int id, HttpServletResponse response) {
+        Document document = repository.findById(id).get();
+        byte[] data = document.getData();
+
+        response.setHeader("Content-Disposition", "attachment;filename=downloaded.jpeg");
+
+        return outputStream -> {
+            outputStream.write(data);
+        };
+    }
