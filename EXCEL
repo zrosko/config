@@ -162,3 +162,96 @@ public class BcmRestController {
 		excelExporter.export(response);
 	}
 }
+=====================
+package com.rbc.nexgen.eureka.bcm.exporter;
+
+import com.rbc.nexgen.eureka.bcm.entity.NexGenValueObject;
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.CellStyle;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.xssf.usermodel.XSSFFont;
+import org.apache.poi.xssf.usermodel.XSSFSheet;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+
+import javax.servlet.ServletOutputStream;
+import javax.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.util.LinkedHashMap;
+import java.util.List;
+
+public class GenericExcelExporter {
+    private XSSFWorkbook workbook;
+    private XSSFSheet sheet;
+    private List<NexGenValueObject> listValueObjects;
+
+    public GenericExcelExporter(List<NexGenValueObject> listValueObjects) {
+        this.listValueObjects = listValueObjects;
+        workbook = new XSSFWorkbook();
+    }
+
+
+    private boolean writeHeaderLine() {
+        sheet = workbook.createSheet("DefaultSheet");
+
+        Row row = sheet.createRow(0);
+
+        CellStyle style = workbook.createCellStyle();
+        XSSFFont font = workbook.createFont();
+        font.setBold(true);
+        font.setFontHeight(16);
+        style.setFont(font);
+
+        if(listValueObjects!=null && listValueObjects.size()>0) {
+            NexGenValueObject vo = listValueObjects.get(0);
+            LinkedHashMap<String, String> metaData = vo.getMetaData();
+            int column=0;
+            for(String columnName: metaData.keySet()) {
+                createCell(row, column++, columnName, style);
+            }
+            return true;
+        }else{
+            return false;
+        }
+    }
+
+    private void createCell(Row row, int columnCount, Object value, CellStyle style) {
+        sheet.autoSizeColumn(columnCount);
+        Cell cell = row.createCell(columnCount);
+        if (value instanceof Integer) {
+            cell.setCellValue((Integer) value);
+        } else if (value instanceof Boolean) {
+            cell.setCellValue((Boolean) value);
+        }else {
+            cell.setCellValue((String) value);
+        }
+        cell.setCellStyle(style);
+    }
+
+    private void writeDataLines() {
+        int rowCount = 1;
+
+        CellStyle style = workbook.createCellStyle();
+        XSSFFont font = workbook.createFont();
+        font.setFontHeight(14);
+        style.setFont(font);
+
+        for (NexGenValueObject vo : listValueObjects) {
+            Row row = sheet.createRow(rowCount++);
+            LinkedHashMap<String, Object> data = vo.getDataValuesRaw();
+            int column=0;
+            for(String columnName: data.keySet()) {
+                createCell(row, column++, data.get(columnName), style);
+            }
+        }
+    }
+
+    public void export(HttpServletResponse response) throws IOException {
+        ServletOutputStream outputStream = response.getOutputStream();
+        if(writeHeaderLine()) {
+            writeDataLines();
+            workbook.write(outputStream);
+            workbook.close();
+        }
+        outputStream.close();
+    }
+}
