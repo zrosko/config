@@ -1,203 +1,179 @@
-spring.jpa.hibernate.naming.physical-strategy=org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
+   @GetMapping("/excel")
+    public void exportToExcel(HttpServletResponse response) throws Exception {
+        response.setContentType("application/octet-stream");
+        DateFormat dateFormatter = new SimpleDateFormat("yyyy-MM-dd_HH:mm:ss");
+        String currentDateTime = dateFormatter.format(new Date());
 
-spring.jpa.hibernate.naming.implicit-strategy=org.hibernate.boot.model.naming.ImplicitNamingStrategyLegacyJpaImpl
-package com.rbc.nexgen.eureka.bcm.exporter;
+        String headerKey = "Content-Disposition";
+        String headerValue = "attachment; filename=users_" + currentDateTime + ".xlsx";
+        response.setHeader(headerKey, headerValue);
 
-import java.io.IOException;
-import java.util.List;
-
-import javax.servlet.ServletOutputStream;
-import javax.servlet.http.HttpServletResponse;
-
-import com.rbc.nexgen.eureka.bcm.entity.NexGenUser;
-import org.apache.poi.ss.usermodel.Cell;
-import org.apache.poi.ss.usermodel.CellStyle;
-import org.apache.poi.ss.usermodel.Row;
-import org.apache.poi.xssf.usermodel.XSSFFont;
-import org.apache.poi.xssf.usermodel.XSSFSheet;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-
-public class UserExcelExporter {
-    private XSSFWorkbook workbook;
-    private XSSFSheet sheet;
-    private List<NexGenUser> listUsers;
-
-    public UserExcelExporter(List<NexGenUser> listUsers) {
-        this.listUsers = listUsers;
-        workbook = new XSSFWorkbook();
-    }
-
-
-    private void writeHeaderLine() {
-        sheet = workbook.createSheet("Users");
-
-        Row row = sheet.createRow(0);
-
-        CellStyle style = workbook.createCellStyle();
-        XSSFFont font = workbook.createFont();
-        font.setBold(true);
-        font.setFontHeight(16);
-        style.setFont(font);
-
-        createCell(row, 0, "User ID", style);
-        createCell(row, 1, "First Name", style);
-        createCell(row, 2, "Last Name", style);
-    }
-
-    private void createCell(Row row, int columnCount, Object value, CellStyle style) {
-        sheet.autoSizeColumn(columnCount);
-        Cell cell = row.createCell(columnCount);
-        if (value instanceof Integer) {
-            cell.setCellValue((Integer) value);
-        } else if (value instanceof Boolean) {
-            cell.setCellValue((Boolean) value);
-        }else {
-            cell.setCellValue((String) value);
+        List<NexGenValueObject> listValueObjects = new ArrayList<NexGenValueObject>();
+        /**
+         * To enable export of SQL Entity data to Excel, make all Entity attributes public,
+         * extend NexGenValueObject, do mapping in a FOR loop Entity to NexGenValueObject.
+         */
+        List<BusinessUnit> listBusinessUnits = (List<BusinessUnit>) businessUnitRepository.findAll();
+        for(BusinessUnit row: listBusinessUnits){
+            listValueObjects.add(row);
         }
-        cell.setCellStyle(style);
-    }
-
-    private void writeDataLines() {
-        int rowCount = 1;
-
-        CellStyle style = workbook.createCellStyle();
-        XSSFFont font = workbook.createFont();
-        font.setFontHeight(14);
-        style.setFont(font);
-
-        for (NexGenUser user : listUsers) {
-            Row row = sheet.createRow(rowCount++);
-            int columnCount = 0;
-
-            createCell(row, columnCount++, user.getId(), style);
-            createCell(row, columnCount++, user.getFirstName(), style);
-            createCell(row, columnCount++, user.getLastName(), style);
-
-        }
-    }
-
-    public void export(HttpServletResponse response) throws IOException {
-        writeHeaderLine();
-        writeDataLines();
+        XSSFWorkbook excelFile = NexGenExcelUtils.prepareExcelFromData(listValueObjects);
         ServletOutputStream outputStream = response.getOutputStream();
-        workbook.write(outputStream);
-        workbook.close();
+        excelFile.write(outputStream);
+        excelFile.close();
         outputStream.close();
     }
-}
-=====================
-package com.rbc.nexgen.eureka.bcm.entity;
+    
+    package com.rbc.nexgen.eureka.core.excel;
 
-import lombok.Data;
+import com.rbc.nexgen.eureka.core.NexGenValueObject;
+import lombok.experimental.UtilityClass;
+import lombok.extern.log4j.Log4j2;
+import org.apache.poi.hssf.usermodel.HSSFWorkbook;
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
-import javax.persistence.*;
-
-/**
- * http://localhost:10761/nexGenUsers/1
- */
-@Data
-@Entity
-@Table(name="nex_gen_user")
-public class NexGenUser {
-    @Id
-    @GeneratedValue(strategy = GenerationType.AUTO)
-    private int id;
-
-    @Column(name = "first_name")
-    private String firstName;
-
-    @Column(name = "last_name")
-    private String lastName;
-}
-============================
-package com.rbc.nexgen.eureka.bcm.controller;
-
-import com.rbc.nexgen.eureka.bcm.entity.NexGenUser;
-import com.rbc.nexgen.eureka.bcm.exporter.UserExcelExporter;
-import com.rbc.nexgen.eureka.service.UserService;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.CrossOrigin;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
-
-import javax.servlet.http.HttpServletResponse;
-import java.io.IOException;
-import java.text.DateFormat;
-import java.text.SimpleDateFormat;
-import java.util.Date;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 
-/**
- * In case we need to have to send response in XML format do the following:
- * https://www.udemy.com/course/spring-springboot-jpa-hibernate-zero-to-master/learn/lecture/31136684#overview
- * Lesson 214
- * 1. Add jackson-dataformat-xml to pom.xml
- * 2. Change @RequestMapping annotation (, producers =
- * 		{MediaType.APPLICATION_JSON_VALUE, MediaTYpe.APPLICATION_XML_VALUE}
- * 3. Caller has to add Accept = application/xml to header
- */
-@RestController
-@Slf4j
-@CrossOrigin(origins="*")
-@RequestMapping("/bcm")
+//https://www.petrikainulainen.net/programming/spring-framework/spring-batch-tutorial-reading-information-from-an-excel-file/
+@Log4j2
+@UtilityClass
+public class NexGenExcelUtils {
 
-public class BcmRestController {
+    public static XSSFWorkbook prepareExcelFromData(List<NexGenValueObject> data) throws Exception {
+        NexGenExcelExporter nexGenExcelExporter = new NexGenExcelExporter(data);
+        if(nexGenExcelExporter.writeHeaderLine()) {
+            nexGenExcelExporter.writeDataLines();
+        }
+        return nexGenExcelExporter.workbook;
+    }
+    //TODO accept the list with explicit classes instead of NexGenValueObject e.g. Application
+    public static List<NexGenValueObject> loadListFromExcel(String excelFileName) throws Exception {
+        File xlsFile = new File(excelFileName);
+        String ext = getFileExtension(excelFileName);
 
-	@Autowired
-	private UserService service;
+        if (ext.equalsIgnoreCase("xls")) {
+            //Old Excel format
+            return loadListFromExcelXls(xlsFile);
+        } else if (ext.equalsIgnoreCase("xlsx")) {
+            //New Excel format
+            return loadListFromExcelXlsx(xlsFile);
+        } else {
+            throw new Exception("EXCEPTION - FILE EXTENSION NOT RECOGNIZED, IT SHOULD XLS or XLSX");
+        }
+    }
+    public static List<NexGenValueObject> loadListFromExcelXls(File xlsFile) throws Exception {
+        List<NexGenValueObject> valueObjectsList = new ArrayList<>();
+        InputStream xlsFIS = new FileInputStream(xlsFile);
+        Workbook workbook = new HSSFWorkbook(xlsFIS);
+        xlsFIS.close();
+        Sheet sheet = workbook.getSheetAt(0);//TODO see name instead of number
+        //Here we keep the names of the columns
+        LinkedHashMap<String, String> metaData = new LinkedHashMap<String, String>();
+        // Iterate through each rows from first sheet
+        Iterator<Row> rowIterator = sheet.iterator();
+        int rowCount = 1;
+        while (rowIterator.hasNext()) {
+            NexGenValueObject valueObject = new NexGenValueObject();
+            Row row = rowIterator.next();
+            //Fore each row iterate through each column
+            Iterator<Cell> cellIterator = row.cellIterator();
 
-	@GetMapping("/excel")
-	public void exportToExcel(HttpServletResponse response) throws IOException {
-		response.setContentType("application/octet-stream");
-		DateFormat dateFormatter = new SimpleDateFormat("yyyy-MM-dd_HH:mm:ss");
-		String currentDateTime = dateFormatter.format(new Date());
+            while (cellIterator.hasNext()) {
 
-		String headerKey = "Content-Disposition";
-		String headerValue = "attachment; filename=users_" + currentDateTime + ".xlsx";
-		response.setHeader(headerKey, headerValue);
+                Cell cell = cellIterator.next();
+                int cellIndex = cell.getColumnIndex();
+                String cellValue="";
 
-		List<NexGenUser> listUsers = service.listAll();
+                switch (cell.getCellType()) {
+                    case BLANK:
+                    case ERROR:
+                        cellValue="";
+                        break;
+                    case BOOLEAN:
+                        cellValue= String.valueOf(cell.getBooleanCellValue());
+                        break;
+                    case NUMERIC:
+                        cellValue= String.valueOf(cell.getNumericCellValue());
+                        break;
+                    case STRING:
+                        cellValue= String.valueOf(cell.getStringCellValue());
+                        break;
+                    default:
+                        cellValue="";
+                        log.info("UNKNOWN"+cell.getColumnIndex());
+                        break;
+                }
 
-		UserExcelExporter excelExporter = new UserExcelExporter(listUsers);
+                if(rowCount==1){
+                    //first row we assume has header (column names)
+                    metaData.put(String.valueOf(cellIndex), cellValue);
+                } else {
+                    //get the column name from metadata (row #1) saved
+                    valueObject.setRaw(metaData.get(String.valueOf(cellIndex)),cellValue);
+                }
+            }
+            if(rowCount>1) {
+                valueObjectsList.add(valueObject);
+            }
+            rowCount++;
+        }
+        return valueObjectsList;
+    }
 
-		excelExporter.export(response);
-	}
+    public static List<NexGenValueObject> loadListFromExcelXlsx(File xlsFile){
+        //TODO for a new Excel (xlsx) file later (after the project MVP phase)
+        List<NexGenValueObject> valueObjectsList = new ArrayList<>();
+        return valueObjectsList;
+    }
+
+    private static String getFileExtension(String fileName) {
+        String ext = "";
+        int mid = fileName.lastIndexOf(".");
+        ext = fileName.substring(mid + 1, fileName.length());
+        return ext;
+    }
 }
-=====================
-package com.rbc.nexgen.eureka.bcm.exporter;
+package com.rbc.nexgen.eureka.core.excel;
 
-import com.rbc.nexgen.eureka.bcm.entity.NexGenValueObject;
+import com.rbc.nexgen.eureka.core.NexGenValueObject;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.xssf.usermodel.XSSFFont;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-
+import org.apache.poi.util.POILogFactory;
 import javax.servlet.ServletOutputStream;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Set;
 
-public class GenericExcelExporter {
-    private XSSFWorkbook workbook;
+public class NexGenExcelExporter {
+    protected XSSFWorkbook workbook;
     private XSSFSheet sheet;
     private List<NexGenValueObject> listValueObjects;
+    POILogFactory f;
 
-    public GenericExcelExporter(List<NexGenValueObject> listValueObjects) {
+    public NexGenExcelExporter(List<NexGenValueObject> listValueObjects) {
         this.listValueObjects = listValueObjects;
         workbook = new XSSFWorkbook();
     }
 
-
-    private boolean writeHeaderLine() {
+    protected boolean writeHeaderLine() {
         sheet = workbook.createSheet("DefaultSheet");
-
         Row row = sheet.createRow(0);
-
         CellStyle style = workbook.createCellStyle();
         XSSFFont font = workbook.createFont();
         font.setBold(true);
@@ -208,7 +184,8 @@ public class GenericExcelExporter {
             NexGenValueObject vo = listValueObjects.get(0);
             LinkedHashMap<String, String> metaData = vo.getMetaData();
             int column=0;
-            for(String columnName: metaData.keySet()) {
+            Set<String> E = metaData.keySet();
+            for(String columnName: E) {
                 createCell(row, column++, columnName, style);
             }
             return true;
@@ -230,7 +207,7 @@ public class GenericExcelExporter {
         cell.setCellStyle(style);
     }
 
-    private void writeDataLines() {
+    protected void writeDataLines() {
         int rowCount = 1;
 
         CellStyle style = workbook.createCellStyle();
@@ -240,9 +217,10 @@ public class GenericExcelExporter {
 
         for (NexGenValueObject vo : listValueObjects) {
             Row row = sheet.createRow(rowCount++);
-            LinkedHashMap<String, Object> data = vo.getDataValuesRaw();
+            LinkedHashMap<String, Object> data = vo.getDataValues();
             int column=0;
-            for(String columnName: data.keySet()) {
+            Set<String> E = data.keySet();
+            for(String columnName: E) {
                 createCell(row, column++, data.get(columnName), style);
             }
         }
@@ -258,17 +236,3 @@ public class GenericExcelExporter {
         outputStream.close();
     }
 }
-======
-//TODO NexGenValueObject
-		List<NexGenValueObject> listVo = new ArrayList<NexGenValueObject>();
-		NexGenValueObject vo1 = new NexGenValueObject();
-		vo1.getMetaData();
-		vo1.set("id","1000");
-		vo1.set("name","xyz");
-		listVo.add(vo1);
-
-		NexGenValueObject vo2 = new NexGenValueObject();
-		vo2.getMetaData();
-		vo2.set("id","10001");
-		vo2.set("name","xyzq");
-		listVo.add(vo1);
