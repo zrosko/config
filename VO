@@ -1,0 +1,301 @@
+package com.rbc.nexgen.eureka.bcm.entity;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import java.lang.reflect.Field;
+import java.math.BigDecimal;
+import java.util.LinkedHashMap;
+import java.util.Set;
+
+/**
+ * Base class for other model or entity classes to inherit from.
+ */
+public class NexGenValueObject {
+    LinkedHashMap<String, String> metaData = new LinkedHashMap<String, String>();
+    LinkedHashMap<String, Field> dataFields = new LinkedHashMap<String, Field>();
+    LinkedHashMap<String, Object> dataValues = new LinkedHashMap<String, Object>();
+
+    public NexGenValueObject() {
+        /*
+         * Data values are not available at the time of an object construction.
+         * We will populate data field values later when using getters/setters of the data.
+         */
+        dataValues = null;
+        /*
+         * Metadata is available at the time of an object construction, therefore, we populate it here.
+         * Data fields are needed when updating values, e.g. when using a "set" methods (not for setRaw).
+         */
+        metaData = null;
+        dataFields = null;
+    }
+    public void setDataValuesRaw(LinkedHashMap<String, Object> dataValues){
+        this.dataValues = dataValues;
+    }
+    /**
+     * We are collecting just data types meta data, e.g. java.lang.String, java.util.Date.
+     *
+     * @return
+     */
+    public LinkedHashMap<String, String> getMetaData() {
+        if(metaData==null) {
+            metaData = new LinkedHashMap<String, String>();
+            dataFields = new LinkedHashMap<String, Field>();
+
+            Field[] fieldList = this.getClass().getDeclaredFields();
+
+            for (Field name : fieldList) {
+                if(name.getName().equals("metaData")
+                    || name.getName().equals("dataFields")
+                    || name.getName().equals("dataValues")){
+                    //N/A
+                }else {
+                    metaData.put(name.getName(), name.getType().getCanonicalName());
+                    //dataFields.put(name.getName(), name.get());
+                }
+            }
+        }
+        return metaData;
+    }
+
+    public void setJsonData(String jsonData, String fieldNames){
+        try {
+            ObjectMapper objectMapper = new ObjectMapper();
+            LinkedHashMap<String, String> additionalData = objectMapper.readValue(jsonData, LinkedHashMap.class);
+            //TODO split fieldNames, loop over fieldNames, take values from data, set the values
+            set(fieldNames, additionalData.get(fieldNames));
+        }catch (Exception e){
+            //TODO handle exception
+            e.printStackTrace();
+        }
+    }
+
+    public String getTyeForName(String name) {
+        String type = this.getMetaData().get(name);
+        if (type == null)
+            type = "";
+
+        return type;
+    }
+
+    public LinkedHashMap<String, Object> getDataValuesRaw() {
+        return this.dataValues;
+    }
+    public LinkedHashMap<String, Object> getDataValues() {
+        if (metaData == null)
+            getMetaData();
+
+        if (dataValues == null) {
+            dataValues = new LinkedHashMap<String, Object>();
+
+            Field[] fieldList = this.getClass().getDeclaredFields();
+
+            for (Field name : fieldList) {
+                try {
+                    if(name.getName().equals("metaData")
+                        || name.getName().equals("dataFields")
+                        || name.getName().equals("dataValues")){
+                        //N/A
+                    }else {
+                        dataValues.put(name.getName(), name.get(this));
+                    }
+                } catch (IllegalArgumentException | IllegalAccessException e) {
+                    //TODO see what to use: null or ""
+                    dataValues.put(name.getName(), null);
+                }
+            }
+        }
+        return dataValues;
+    }
+
+    public int size() {
+        return dataValues != null ? dataValues.size() : 0;
+    }
+
+    public void clear() {
+        if (dataValues != null)
+            dataValues.clear();
+    }
+
+    public Set<String> getOrder() {
+        if (dataValues == null)
+            dataValues = getDataValues();
+
+        return dataValues.keySet();
+    }
+
+    public void setRaw(String name, Object value) {
+        if (dataValues == null) {
+            dataValues = new LinkedHashMap<String, Object>();
+        }
+        dataValues.put(name, value);
+    }
+
+    public void set(String name, Object value) {
+        set(name, value, true);
+    }
+    public void set(String name, Object value, boolean saveToOriginalObject) {
+        if (metaData == null)
+            getMetaData();
+
+        if (dataValues == null)
+            getDataValues();
+
+        Field field = dataFields.get(name);
+
+        try {
+            if(field==null){
+                //new field
+                metaData.put(name,"java.lang.String");
+                dataValues.put(name, value);
+
+            } else {
+                //save to duplicate data collection (we use it for validation purpose)
+                dataValues.put(name, value);
+                //save to original object
+                //This If statement is needed since field.set causes Exception when
+                //using NexGenBeanPropertyRowMapper java reflection (field.set is private,....
+                if(saveToOriginalObject)
+                    field.set(this, value);
+            }
+        } catch (Exception e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+    }
+
+    public Object getValue(String name) {
+        if (dataValues == null)
+            dataValues = getDataValues();
+
+        Object o = dataValues.get(name);
+        return o;
+    }
+
+    public String get(String name) {
+        return getAsString(name);
+    }
+
+    public String getAsString(String name) {
+        Object o = getValue(name);
+        if (o == null)
+            return "";
+        else
+            return o.toString();
+    }
+
+    public String getAsStringOrZero(String name) {
+        Object o = getValue(name);
+        if (o != null) {
+            String s = o.toString().trim();
+            if (s.length() > 0)
+                return o.toString();
+            else
+                return "0";
+        } else
+            return "0";
+    }
+
+    //Integer
+    public int getValueAsInt(String name, int defaultValue) {
+        int value;
+
+        try {
+            String stringValue = getAsString(name);
+            if(stringValue.length()==0)
+                stringValue = "0";
+            value = Integer.parseInt(stringValue);
+            if(value == 0)
+                return defaultValue;
+        } catch (Exception e) {
+            value = 0;
+        }
+        return value;
+    }
+
+    public int getAsInt(String name) {
+        try {
+            return Integer.parseInt(getAsStringOrZero(name));
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+    public Integer getAsIntegerObject(String name) {
+        return Integer.valueOf(getAsStringOrZero(name));
+    }
+    //Short
+    public short getAsShort(String name) {
+        try {
+            return Short.parseShort(getAsStringOrZero(name));
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+    public Short getAsShortObject(String name) {
+        return Short.valueOf(getAsStringOrZero(name));
+    }
+    //Long
+    public long getAsLong(String name) {
+        return Long.parseLong(getAsStringOrZero(name));
+    }
+
+    public Long getAsLongObject(String name) {
+        return Long.valueOf(getAsStringOrZero(name));
+    }
+    //Float
+    public float getAsFloat(String name) {
+        return Float.parseFloat(getAsStringOrZero(name));
+    }
+    public Float getAsFloatObject(String name) {
+        return Float.valueOf(getAsStringOrZero(name));
+    }
+    //Double
+    public double getAsDouble(String name) {
+        return Double.parseDouble(getAsStringOrZero(name));
+    }
+    public Double getAsDoubleObject(String name) {
+        return Double.valueOf(getAsStringOrZero(name));
+    }
+    // BigDecimal
+    public BigDecimal getAsBigDecimal(String name) {
+        return new BigDecimal(getAsStringOrZero(name));
+    }
+
+    public Object getAsJavaType(String name) {
+        String type = getTyeForName(name);
+
+        if (type.equals("java.lang.String")) {
+            return getAsString(name);
+        } else if (type.equals("java.util.Date")) {
+            //java.sql.Timestamp t = getAsSqlTimestamp(name);
+            //return new java.util.Date(t.getTime());
+            return null;
+        } else if (type.equals("java.sql.Timestamp")) {
+            //return getAsSqlTimestamp(name);
+            return null;
+        } else if (type.equals("java.lang.Double")) {
+            return getAsDoubleObject(name);
+        } else if (type.equals("double")) {
+            return getAsDoubleObject(name);
+        } else if (type.equals("java.lang.Integer")) {
+            return getAsIntegerObject(name);
+        } else if (type.equals("int")) {
+            return getAsIntegerObject(name);
+        } else if (type.equals("java.lang.Short")) {
+            return getAsShortObject(name);
+        } else if (type.equals("short")) {
+            return getAsShortObject(name);
+        }else if (type.equals("java.lang.Float")) {
+            return getAsFloatObject(name);
+        } else if (type.equals("float")) {
+            return getAsFloatObject(name);
+        }else if (type.equals("java.math.BigDecimal")) {
+            return getAsBigDecimal(name);
+        } else if (type.equals("java.lang.Long")) {
+            return getAsLongObject(name);
+        }else if (type.equals("long")) {
+            return getAsLongObject(name);
+        }
+        return "";
+    }
+}
+
