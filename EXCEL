@@ -255,3 +255,17 @@ public class GenericExcelExporter {
         outputStream.close();
     }
 }
+======
+//TODO NexGenValueObject
+		List<NexGenValueObject> listVo = new ArrayList<NexGenValueObject>();
+		NexGenValueObject vo1 = new NexGenValueObject();
+		vo1.getMetaData();
+		vo1.set("id","1000");
+		vo1.set("name","xyz");
+		listVo.add(vo1);
+
+		NexGenValueObject vo2 = new NexGenValueObject();
+		vo2.getMetaData();
+		vo2.set("id","10001");
+		vo2.set("name","xyzq");
+		listVo.add(vo1);
