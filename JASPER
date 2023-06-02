@@ -1,0 +1,43 @@
+package com.rbc.nexgen.eureka;
+
+import com.rbc.nexgen.eureka.batch.entity.NexGenStatistics;
+import net.sf.jasperreports.engine.*;
+import net.sf.jasperreports.engine.data.JRBeanCollectionDataSource;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+public class JasperTest {
+    public static void main(String[] args) {
+        String filePath = "C:\\JAVA-INTELLIJ-PROJECTS\\NexGenEureka\\src\\main\\resources\\NexGenStatistics.jrxml";
+        String filePathExport = "C:\\JAVA-INTELLIJ-PROJECTS\\NexGenEureka\\src\\main\\resources\\NexGenStatistics.pdf";
+        Map<String, Object> parameters = new HashMap<String, Object>();
+        parameters.put("userName", "Admin");
+        NexGenStatistics nexGenStatistics1 = new NexGenStatistics();
+        nexGenStatistics1.setJobExecutionId(1);
+        nexGenStatistics1.setStepExecutionId("100");
+        nexGenStatistics1.setStepName("Name 100");
+        NexGenStatistics nexGenStatistics2 = new NexGenStatistics();
+        nexGenStatistics1.setJobExecutionId(2);
+        nexGenStatistics1.setStepExecutionId("200");
+        nexGenStatistics1.setStepName("Name 200");
+        NexGenStatistics nexGenStatistics3 = new NexGenStatistics();
+        nexGenStatistics1.setJobExecutionId(3);
+        nexGenStatistics1.setStepExecutionId("300");
+        nexGenStatistics1.setStepName("Name 300");
+        List<NexGenStatistics> rows = new ArrayList<NexGenStatistics>();
+        rows.add(nexGenStatistics1);
+        rows.add(nexGenStatistics2);
+        rows.add(nexGenStatistics3);
+        JRBeanCollectionDataSource dataSource = new JRBeanCollectionDataSource(rows);
+        try {
+            JasperReport report = JasperCompileManager.compileReport(filePath);
+            JasperPrint print = JasperFillManager.fillReport(report, parameters, dataSource);
+            byte[] rep = JasperExportManager.exportReportToPdf(print);
+        }catch (Exception ex){
+            ex.printStackTrace();
+        }
+    }
+}
